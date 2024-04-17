@@ -245,9 +245,10 @@ export const findDraftTeamById = async (
   id: number
 ): Promise<number[] | undefined> => {
   try {
-    const ids = (await db.any(
+    const draft = (await db.one(
       `SELECT match.id_equipe1, match.id_equipe2 FROM match INNER JOIN draft ON match.id_match = draft.id_match WHERE draft.id_draft = ${id}`
-    )) as number[];
+    )) as Match;
+    const ids = [draft.id_equipe1, draft.id_equipe2];
     return ids;
   } catch (e) {
     return undefined;
@@ -271,20 +272,38 @@ export const findDraftSemaineById = async (
 // route /draft/:id or /player-route/:username/draft/:id or /game-master-route/draft/:id
 export const findDraftByIdAs = async (
   id: number,
-  currentTeamId: number,
-  isGameMaster: boolean
+  currentUserName?: string,
+  isGameMaster?: boolean
 ): Promise<Draft | undefined> => {
   try {
     if (isGameMaster) {
       const draft = await db.one(`SELECT * FROM draft WHERE id_draft = ${id}`);
       return draft;
     }
+    var currentTeamId: number | undefined = undefined;
+    if (currentUserName !== undefined) {
+      if (currentUserName !== "") {
+        const currentTeam = (await db.one(
+          `SELECT id_equipe FROM equipe INNER JOIN users ON equipe.id_user = users.id_user  WHERE username = '${currentUserName}'`
+        )) as Team;
+        currentTeamId = currentTeam.id_equipe;
+      }
+    }
+    console.log("team qui demande du link", currentTeamId);
     const teams = await findDraftTeamById(id);
+    console.log("teams", teams);
     const semaine = await findDraftSemaineById(id);
+    console.log("semaine de la draft", semaine);
     if (teams === undefined || semaine === undefined) {
       return undefined;
     }
     const currentTimeLine = await findTimeLine();
+    console.log(
+      "current timeline",
+      currentTimeLine?.semaine,
+      currentTimeLine?.isdraftpassed,
+      currentTimeLine?.isbanpassed
+    );
     if (currentTimeLine === undefined) {
       return undefined;
     }
@@ -295,52 +314,64 @@ export const findDraftByIdAs = async (
       const draft = await db.one(`SELECT * FROM draft WHERE id_draft = ${id}`);
     } else {
       // le match est en cours, ca depend des phases
-      if (currentTimeLine.isDraftPassed === true) {
+      if (currentTimeLine.isdraftpassed === true) {
         /// PHASE DE DRAFT passée tout le monde peut voir la draft
+        console.log("draft passée");
         const draft = await db.one(
           `SELECT * FROM draft WHERE id_draft = ${id}`
         );
+        return draft;
       } else {
-        if (currentTimeLine.isBanPassed === false) {
+        console.log("draft pas passée");
+        if (currentTimeLine.isbanpassed === false) {
+          console.log("ban pas passés");
           /// PHASE DE BAN, SEULS LES EQUIPES PEUVENT AVOIR ACCES A LEUR PROPRE BANS
           const canWatch1 = teams[0] === currentTeamId;
+          const canWatch2 = teams[1] === currentTeamId;
+          console.log(teams[0], teams[1], currentTeamId);
+          console.log("can watch", canWatch1, canWatch2);
           if (canWatch1) {
             const draft = await db.one(
               `SELECT id_draft, id_match, id_joueur1mid, id_joueur1bot, id_joueur1sup, id_joueur2mid, id_joueur2bot, id_joueur2sup, id_ban1_1, id_ban1_2 FROM draft WHERE id_draft = ${id}`
             );
             return draft;
-          } else {
+          } else if (canWatch2) {
             const draft = await db.one(
               `SELECT id_draft, id_match, id_joueur1mid, id_joueur1bot, id_joueur1sup, id_joueur2mid, id_joueur2bot, id_joueur2sup, id_ban2_1, id_ban2_2 FROM draft WHERE id_draft = ${id}`
             );
             return draft;
+          } else {
+            const draft = await db.one(
+              `SELECT id_draft, id_match, id_joueur1mid, id_joueur1bot, id_joueur1sup, id_joueur2mid, id_joueur2bot, id_joueur2sup FROM draft WHERE id_draft = ${id}`
+            );
+            //random qui se connecte et qui n'est pas dans les équipes
+            return draft;
           }
         } else {
           //BAN PAssés, tt le monde peut voir les bans mais pas les picks
+          console.log("ban passés");
+          console.log(currentTimeLine.isbanpassed);
           const canWatch1 = teams[0] === currentTeamId;
+          const canWatch2 = teams[1] === currentTeamId;
           if (canWatch1) {
             const draft = await db.one(
               `SELECT id_draft, id_match, id_joueur1mid, id_joueur1bot, id_joueur1sup, id_joueur2mid, id_joueur2bot, id_joueur2sup, id_champion1mid, id_champion1bot, id_champion1sup, id_ban1_1, id_ban1_2, id_ban2_1, id_ban2_2 FROM draft WHERE id_draft = ${id}`
             );
             return draft;
-          } else {
+          } else if (canWatch2) {
             const draft = await db.one(
               `SELECT id_draft, id_match, id_joueur1mid, id_joueur1bot, id_joueur1sup, id_joueur2mid, id_joueur2bot, id_joueur2sup, id_champion2mid, id_champion2bot, id_champion2sup, id_ban1_1, id_ban1_2, id_ban2_1, id_ban2_2 FROM draft WHERE id_draft = ${id}`
+            );
+            return draft;
+          } else {
+            //random qui se connecte et qui n'est pas dans les équipes, peut voir les bans mais pas les picks
+            const draft = await db.one(
+              `SELECT id_draft, id_match, id_joueur1mid, id_joueur1bot, id_joueur1sup, id_joueur2mid, id_joueur2bot, id_joueur2sup, id_ban1_1, id_ban1_2, id_ban2_1, id_ban2_2 FROM draft WHERE id_draft = ${id}`
             );
             return draft;
           }
         }
       }
-    }
-    const canWatch1 = teams[0] === currentTeamId;
-    if (canWatch1 || isGameMaster) {
-      const draft = await db.one(`SELECT * FROM draft WHERE id_draft = ${id}`);
-      return draft;
-    } else {
-      const draft = await db.one(
-        `SELECT id_draft, id_match FROM draft WHERE id_draft = ${id}`
-      );
-      return draft;
     }
   } catch (e) {
     return undefined;

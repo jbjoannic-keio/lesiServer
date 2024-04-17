@@ -19,6 +19,7 @@ import {
   getAllHabitudes,
   findMatchById,
   getAllMatchs,
+  findDraftByIdAs,
 } from "../models/databaseQueries";
 
 const router = express.Router();
@@ -325,5 +326,56 @@ router.get("/matchs", async (req: Request, res: Response) => {
 // Draft
 
 // route /draft/:id or /player-route/:username/draft/:id or /game-master-route/draft/:id
+
+router.get("/draft/:id", async (req: Request, res: Response) => {
+  try {
+    const draft = await findDraftByIdAs(parseInt(req.params.id));
+    if (!draft) {
+      res.status(404).send("No draft found");
+    } else {
+      res.json(draft);
+    }
+  } catch (e) {
+    res.status(500).send("Internal Server Error");
+  }
+});
+
+router.get(
+  "/player-route/:username/draft/:id",
+  authenticateRole(["player"]),
+  authenticateUsername(),
+  async (req: Request, res: Response) => {
+    try {
+      const draft = await findDraftByIdAs(
+        parseInt(req.params.id),
+        req.params.username
+      );
+      if (!draft) {
+        res.status(404).send("No draft found");
+      } else {
+        res.json(draft);
+      }
+    } catch (e) {
+      res.status(500).send("Internal Server Error");
+    }
+  }
+);
+
+router.get(
+  "/game-master-route/draft/:id",
+  authenticateRole(["gameMaster"]),
+  async (req: Request, res: Response) => {
+    try {
+      const draft = await findDraftByIdAs(parseInt(req.params.id), "", true);
+      if (!draft) {
+        res.status(404).send("No draft found");
+      } else {
+        res.json(draft);
+      }
+    } catch (e) {
+      res.status(500).send("Internal Server Error");
+    }
+  }
+);
 
 export default router;

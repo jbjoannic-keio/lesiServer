@@ -83,6 +83,6 @@ export interface Draft {
 
 export interface TimeLine {
   semaine: number;
-  isBanPassed: boolean;
-  isDraftPassed: boolean;
+  isbanpassed: boolean;
+  isdraftpassed: boolean;
 }
